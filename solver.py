@@ -604,7 +604,7 @@ def main():
     graph_files = args.graphs[0] if not args.file else args.file
     suffix = f"_{args.name}" if args.name else ""
 
-    # graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
+    graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
     # graphs = load_n_danie_graphs(3)
     # graphs = load_graphs('danie', mode='dwneV', grange=(None, 14))
 
