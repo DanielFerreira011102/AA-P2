@@ -332,6 +332,7 @@ class Graph(nx.Graph):
                 graph = Graph._from_txt_file(path, mode=mode)
 
         graph.path = path
+        graph.name = os.path.basename(path)
         return graph
 
     @staticmethod
