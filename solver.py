@@ -138,7 +138,6 @@ class ISDPSolver:
         example_solution = None
 
         n = len(nodes)
-        node_indices = range(n)
         max_combinations = comb(n, kn)
 
         if isinstance(num_iterations, float):
@@ -194,15 +193,15 @@ class ISDPSolver:
                 if len(selected_vertices_set) == max_combinations:
                     break
 
-                selected_vertices = random.sample(node_indices, kn)
+                selected_vertices = random.sample(nodes, kn)
                 for _ in range(num_attempts):
                     if set(selected_vertices) not in selected_vertices_set:
                         selected_vertices_set.add(frozenset(selected_vertices))
                         break
-                    selected_vertices = random.sample(node_indices, kn)
+                    selected_vertices = random.sample(nodes, kn)
 
                 is_independent_set = not any(
-                    graph.has_edge(nodes[u], nodes[v]) for i, u in enumerate(selected_vertices) for v in
+                    graph.has_edge(u, v) for i, u in enumerate(selected_vertices) for v in
                     selected_vertices[i + 1:])
 
                 if is_independent_set:
@@ -265,8 +264,6 @@ class ISDPSolver:
         repetition_times_at_checkpoints = [[] for _ in range(len(check_points))]
 
         n = len(nodes)
-        node_indices = range(n)
-
         max_combinations = comb(n, kn)
 
         if any(isinstance(check_point, float) for check_point in check_points):
@@ -323,15 +320,15 @@ class ISDPSolver:
                 if len(selected_vertices_set) == max_combinations:
                     break
 
-                selected_vertices = random.sample(node_indices, kn)
+                selected_vertices = random.sample(nodes, kn)
                 for _ in range(num_attempts):
                     if set(selected_vertices) not in selected_vertices_set:
                         selected_vertices_set.add(frozenset(selected_vertices))
                         break
-                    selected_vertices = random.sample(node_indices, kn)
+                    selected_vertices = random.sample(nodes, kn)
 
                 is_independent_set = not any(
-                    graph.has_edge(nodes[u], nodes[v]) for i, u in enumerate(selected_vertices) for v in
+                    graph.has_edge(u, v) for i, u in enumerate(selected_vertices) for v in
                     selected_vertices[i + 1:])
 
                 if is_independent_set:
@@ -437,6 +434,7 @@ class ISDPSolver:
             'k': [],
             'kn': [],
             'Iterations': [],
+            'Iterations Percentage': [],
             'Repetitions': [],
             'Total Time': [],
             'Average Repetition Time': [],
@@ -458,6 +456,7 @@ class ISDPSolver:
             data['k'].append(solution.k)
             data['kn'].append(solution.kn)
             data['Iterations'].append(solution.iterations)
+            data['Iterations Percentage'].append(solution.iterations_percentage)
             data['Repetitions'].append(solution.repetitions)
             data['Total Time'].append(solution.total_time)
             data['Average Repetition Time'].append(solution.average_repetition_time)
@@ -605,9 +604,9 @@ def main():
     graph_files = args.graphs[0] if not args.file else args.file
     suffix = f"_{args.name}" if args.name else ""
 
-    graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
+    # graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
     # graphs = load_n_danie_graphs(3)
-    # graphs = load_graphs('danie', mode='dwneV', grange=(None, 50))
+    # graphs = load_graphs('danie', mode='dwneV', grange=(None, 14))
 
     mapping = GraphMapping(graphs)
     mapping.map()

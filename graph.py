@@ -12,14 +12,17 @@ logging.basicConfig(level=logging.INFO,
 
 use('TkAgg')
 
+
 class Graph(nx.Graph):
 
-    def __init__(self, num_vertices: int = None, edge_percentage: float = None, name: str = None, path=None, *args, **kwargs):
+    def __init__(self, num_vertices: int = None, edge_percentage: float = None, name: str = None, path=None, *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.graph['num_vertices'] = num_vertices
         self.graph['edge_percentage'] = edge_percentage
-        self.name = self._generate_name() if name is None else name
+        self.hash = self._generate_hash_name()
         self.path = path
+        self.name = name if name else self.path if self.path else self.hash
 
     def number_of_vertices(self):
         return self.graph.get('num_vertices', None)
@@ -105,7 +108,6 @@ class Graph(nx.Graph):
             case "V":
                 return Graph._from_txt_file_V(filename)
 
-
     @staticmethod
     def _from_txt_file_V(filename):
         """Reads a graph from a TXT file.
@@ -148,7 +150,7 @@ class Graph(nx.Graph):
 
         graph.graph['num_vertices'] = graph.number_of_nodes()
         graph.graph['edge_percentage'] = calculate_edge_percentage(graph.number_of_nodes(), graph.number_of_edges())
-        graph._generate_name()
+        graph.hash = graph._generate_hash_name()
 
         return graph
 
@@ -286,7 +288,7 @@ class Graph(nx.Graph):
 
         graph.graph['num_vertices'] = graph.number_of_nodes()
         graph.graph['edge_percentage'] = calculate_edge_percentage(graph.number_of_nodes(), graph.number_of_edges())
-        graph._generate_name()
+        graph.hash = graph._generate_hash_name()
 
         return graph
 
@@ -303,7 +305,7 @@ class Graph(nx.Graph):
 
         graph = nx.read_gml(filename, destringizer=destringize_to_tuple)
         graph.__class__ = Graph
-        graph._generate_name()
+        graph.hash = graph._generate_hash_name()
 
         return graph
 
@@ -347,7 +349,7 @@ class Graph(nx.Graph):
                 raise ValueError(f"The path {path} is invalid.")
         return graphs
 
-    def _generate_name(self):
+    def _generate_hash_name(self):
         return f"graph_{hash(self)}"
 
     def __str__(self):
@@ -358,7 +360,6 @@ class Graph(nx.Graph):
 
 
 def main():
-
     def teste1():
         gs = Graph.from_files(['collections/SW_ALGUNS_GRAFOS/SWtinyG.txt', 'collections/SW_ALGUNS_GRAFOS/SWtinyDG.txt'],
                               'collections/SW_ALGUNS_GRAFOS/SWtinyGTup.txt')
@@ -383,6 +384,7 @@ def main():
     # teste2()
     # teste3()
     # teste4()
+
 
 if __name__ == '__main__':
     main()
