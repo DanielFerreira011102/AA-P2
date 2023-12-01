@@ -589,7 +589,7 @@ def main():
                         help='Select the group of graphs to load. Only works with cd. Options: 1, 2, 3, 4, 5, 6. Default: None')
     parser.add_argument('--repetitions', help='List of repetitions to run', nargs='+', type=int, default=[10])
     parser.add_argument('--iterations', help='List of iterations to run', nargs='+', type=float,
-                        default=[50, 100, 500, 1000, 2500, 5000, 7500, 10000])
+                        default=[50, 100, 500, 1000, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000])
     parser.add_argument('--k', help='List of k values to run', nargs='+', type=float, default=[0.125, 0.25, 0.5, 0.75])
     parser.add_argument('--name', type=str, default=None,
                         help='Name of the output files. Default: None')
@@ -604,9 +604,9 @@ def main():
     graph_files = args.graphs[0] if not args.file else args.file
     suffix = f"_{args.name}" if args.name else ""
 
-    # graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
+    graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
     # graphs = load_n_danie_graphs(3)
-    graphs = load_graphs('danie', mode='dwneV', grange=(None, 14))
+    # graphs = load_graphs('danie', mode='dwneV', grange=(None, 14))
 
     mapping = GraphMapping(graphs)
     mapping.map()
