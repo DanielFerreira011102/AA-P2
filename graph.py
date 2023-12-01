@@ -150,7 +150,7 @@ class Graph(nx.Graph):
 
         graph.graph['num_vertices'] = graph.number_of_nodes()
         graph.graph['edge_percentage'] = calculate_edge_percentage(graph.number_of_nodes(), graph.number_of_edges())
-        graph.hash = graph._generate_hash_name()
+        graph._generate_hash_name()
 
         return graph
 
@@ -288,7 +288,7 @@ class Graph(nx.Graph):
 
         graph.graph['num_vertices'] = graph.number_of_nodes()
         graph.graph['edge_percentage'] = calculate_edge_percentage(graph.number_of_nodes(), graph.number_of_edges())
-        graph.hash = graph._generate_hash_name()
+        graph._generate_hash_name()
 
         return graph
 
@@ -305,7 +305,7 @@ class Graph(nx.Graph):
 
         graph = nx.read_gml(filename, destringizer=destringize_to_tuple)
         graph.__class__ = Graph
-        graph.hash = graph._generate_hash_name()
+        graph._generate_hash_name()
 
         return graph
 
@@ -351,7 +351,7 @@ class Graph(nx.Graph):
         return graphs
 
     def _generate_hash_name(self):
-        return f"graph_{hash(self)}"
+        self.hash = hash(self)
 
     def __str__(self):
         return f"Graph(name={self.name}, nodes={self.number_of_nodes()}, edges={self.number_of_edges()}, edge_percentage={self.edge_percentage()})"
