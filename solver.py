@@ -8,7 +8,6 @@ from math import log, comb
 from typing import Union, List
 import networkx as nx
 import numpy as np
-from numpy.random import default_rng
 from matplotlib import pyplot as plt
 from time import perf_counter
 import pandas as pd
@@ -24,7 +23,7 @@ logging.basicConfig(level=logging.INFO,
 class Solution:
     def __init__(self, graph: Graph, k, kn, success_count, success, vertices, total_time, average_repetition_time,
                  success_probability, min_success_iteration, max_success_iteration, average_success_iteration,
-                 average_iterations, iterations, iterations_percentage, repetitions):
+                 average_iterations, iterations, iterations_percentage, repetitions, average_operations_count):
         self.graph = graph
         self.k = k
         self.kn = kn
@@ -41,24 +40,29 @@ class Solution:
         self.iterations = iterations
         self.iterations_percentage = iterations_percentage
         self.repetitions = repetitions
+        self.average_operations_count = average_operations_count
 
     def __str__(self):
         return f"Solution(" \
-               f"graph={self.graph.name}, " \
-               f"k={self.k}, " \
-               f"kn={self.kn}, " \
-               f"success_count={self.success_count}, " \
-               f"success={self.success}, " \
-               f"vertices={self.vertices}, " \
-               f"total_time={self.total_time}, " \
-               f"average_repetition_time={self.average_repetition_time}, " \
-               f"success_probability={self.success_probability}, " \
-               f"min_success_iteration={self.min_success_iteration}, " \
-               f"max_success_iteration={self.max_success_iteration}, " \
-               f"average_success_iteration={self.average_success_iteration}, " \
-               f"average_iterations={self.average_iterations}, " \
-               f"iterations={self.iterations}, " \
-               f"repetitions={self.repetitions})"
+                f"graph={self.graph.name}, " \
+                f"k={self.k}, " \
+                f"kn={self.kn}, " \
+                f"success={self.success}, " \
+                f"success_count={self.success_count}, " \
+                f"vertices={self.vertices}, " \
+                f"total_time={self.total_time}, " \
+                f"average_repetition_time={self.average_repetition_time}, " \
+                f"min_success_iteration={self.min_success_iteration}, " \
+                f"max_success_iteration={self.max_success_iteration}, " \
+                f"average_success_iteration={self.average_success_iteration}, " \
+                f"average_iterations={self.average_iterations}, " \
+                f"success_probability={self.success_probability}, " \
+                f"iterations={self.iterations}, " \
+                f"iterations_percentage={self.iterations_percentage}, " \
+                f"repetitions={self.repetitions}, " \
+                f"average_operations_count={self.average_operations_count}" \
+                f")"
+
 
     def __repr__(self):
         return str(self)
@@ -107,14 +111,14 @@ class Solution:
             f"{'k':<20}{'kn':<20}{'Iterations':<20}{'Iterations Percentage':<30}{'Repetitions':<20}"
             f"{'Total Time':<20}{'Average Repetition Time':<30}{'Success Count':<20}"
             f"{'Success Probability':<25}{'Min Success Iteration':<30}{'Max Success Iteration':<30}"
-            f"{'Average Success Iteration':<30}{'Average Iterations':<30}{'Success':<20}{'Vertices':<20}")
+            f"{'Average Success Iteration':<30}{'Average Iterations':<30}{'Operations Count':<30}{'Success':<20}{'Vertices':<20}")
 
         print(
             f"{self.graph.name:<25}{self.graph.number_of_nodes():<30}{self.graph.edge_percentage():<30}"
             f"{self.graph.number_of_edges():<30}{self.k:<20}{self.kn:<20}{self.iterations:<20}{self.iterations_percentage:<30}{self.repetitions:<20}"
             f"{self.total_time:<20.4f}{self.average_repetition_time:<30.4f}{self.success_count:<20}"
             f"{self.success_probability:<25.4f}{self.min_success_iteration:<30}{self.max_success_iteration:<30}"
-            f"{self.average_success_iteration:<30.4f}{self.average_iterations:<30.4f}{self.success:<20}{str(self.vertices):<20}")
+            f"{self.average_success_iteration:<30.4f}{self.average_iterations:<30.4f}{self.average_operations_count:<30.4f}{self.success:<20}{str(self.vertices):<20}")
         print()
 
 
@@ -134,7 +138,9 @@ class ISDPSolver:
 
         nodes = list(graph.nodes())
         success_count = 0
+        operations_count = 0
         iterations_checked = []
+        operations_count = 0
         example_solution = None
 
         n = len(nodes)
@@ -194,15 +200,24 @@ class ISDPSolver:
                     break
 
                 selected_vertices = random.sample(nodes, kn)
+
+                operations_count += n
+
                 for _ in range(num_attempts):
                     if set(selected_vertices) not in selected_vertices_set:
                         selected_vertices_set.add(frozenset(selected_vertices))
                         break
                     selected_vertices = random.sample(nodes, kn)
 
-                is_independent_set = not any(
-                    graph.has_edge(u, v) for i, u in enumerate(selected_vertices) for v in
-                    selected_vertices[i + 1:])
+                is_independent_set = True
+                for i, u in enumerate(selected_vertices):
+                    for v in selected_vertices[i + 1:]:
+                        operations_count += 1
+                        if graph.has_edge(u, v):
+                            is_independent_set = False
+                            break
+
+                operations_count += 1
 
                 if is_independent_set:
                     success_count += 1
@@ -225,6 +240,8 @@ class ISDPSolver:
                                  * (num_repetitions - len(
             iterations_checked))) / num_repetitions if num_repetitions > 0 else 0
 
+        average_operations_count = operations_count / num_repetitions
+
         solution = Solution(
             graph=graph,
             k=k,
@@ -241,7 +258,8 @@ class ISDPSolver:
             average_iterations=average_iterations,
             iterations=num_iterations,
             iterations_percentage=iterations_percentage,
-            repetitions=num_repetitions
+            repetitions=num_repetitions,
+            average_operations_count=average_operations_count
         )
 
         self.solutions.append(solution)
@@ -262,6 +280,7 @@ class ISDPSolver:
         iterations_checked_at_checkpoints = [[] for _ in range(len(check_points))]
         example_solution_at_checkpoints = [None] * len(check_points)
         repetition_times_at_checkpoints = [[] for _ in range(len(check_points))]
+        operations_count_at_checkpoints = [[] for _ in range(len(check_points))]
 
         n = len(nodes)
         max_combinations = comb(n, kn)
@@ -289,7 +308,8 @@ class ISDPSolver:
                 average_iterations=0,
                 iterations=max(check_points),
                 iterations_percentage=max(iteration_percentages),
-                repetitions=num_repetitions
+                repetitions=num_repetitions,
+                average_operations_count=0
             )
 
         if kn > n or n == 0:
@@ -309,27 +329,38 @@ class ISDPSolver:
                 average_iterations=0,
                 iterations=max(check_points),
                 iterations_percentage=max(iteration_percentages),
-                repetitions=num_repetitions
+                repetitions=num_repetitions,
+                average_operations_count=0
             )
 
         for repetition in range(num_repetitions):
             start_repetition = perf_counter()
             selected_vertices_set = set()
+            operations_count = 0
             for iteration in range(max(check_points)):
 
                 if len(selected_vertices_set) == max_combinations:
                     break
 
                 selected_vertices = random.sample(nodes, kn)
+
+                operations_count += n
+
                 for _ in range(num_attempts):
                     if set(selected_vertices) not in selected_vertices_set:
                         selected_vertices_set.add(frozenset(selected_vertices))
                         break
                     selected_vertices = random.sample(nodes, kn)
 
-                is_independent_set = not any(
-                    graph.has_edge(u, v) for i, u in enumerate(selected_vertices) for v in
-                    selected_vertices[i + 1:])
+                is_independent_set = True
+                for i, u in enumerate(selected_vertices):
+                    for v in selected_vertices[i + 1:]:
+                        operations_count += 1
+                        if graph.has_edge(u, v):
+                            is_independent_set = False
+                            break
+
+                operations_count += 1
 
                 if is_independent_set:
                     for i, check_point in enumerate(check_points):
@@ -337,10 +368,12 @@ class ISDPSolver:
                             success_count_at_checkpoints[i] += 1
                             iterations_checked_at_checkpoints[i].append(iteration + 1)
                             example_solution_at_checkpoints[i] = selected_vertices
+                            operations_count_at_checkpoints[i].append(operations_count)
                             repetition_times_at_checkpoints[i].append(perf_counter() - start_repetition)
                     break
 
                 if (iteration + 1) in check_points:
+                    operations_count_at_checkpoints[check_points.index(iteration + 1)].append(operations_count)
                     repetition_times_at_checkpoints[check_points.index(iteration + 1)].append(
                         perf_counter() - start_repetition)
 
@@ -368,7 +401,8 @@ class ISDPSolver:
             iterations_checked))) / num_repetitions if num_repetitions > 0 else 0
                                              for check_point, iterations_checked in
                                              zip(check_points, iterations_checked_at_checkpoints)]
-
+        average_operations_count_at_checkpoints = [sum(operations_count) / len(operations_count) if len(operations_count) > 0 else 0
+                                                    for operations_count in operations_count_at_checkpoints]
         solution_at_checkpoints = [Solution(
             graph=graph,
             k=k,
@@ -385,15 +419,16 @@ class ISDPSolver:
             average_iterations=average_iterations,
             iterations=check_point,
             iterations_percentage=iteration_percentage,
-            repetitions=num_repetitions
+            repetitions=num_repetitions,
+            average_operations_count=operations_count
         ) for success_probability, success_count, example_solution, total_time, average_repetition_time,
               min_iteration_for_success, max_iteration_for_success, average_iteration_for_success, average_iterations,
-              check_point, iteration_percentage in
+              check_point, iteration_percentage, operations_count in
                 zip(success_probability_at_checkpoints, success_count_at_checkpoints,
                  example_solution_at_checkpoints, total_time_at_checkpoints,
                  average_repetition_time_at_checkpoints, min_iteration_for_success_at_checkpoints,
                  max_iteration_for_success_at_checkpoints, average_iteration_for_success_at_checkpoints,
-                 average_iterations_at_checkpoints, check_points, iteration_percentages)]
+                 average_iterations_at_checkpoints, check_points, iteration_percentages, average_operations_count_at_checkpoints)]
 
         self.solutions.extend(solution_at_checkpoints)
 
@@ -410,7 +445,7 @@ class ISDPSolver:
             f"{'k':<20}{'kn':<20}{'Iterations':<20}{'Iterations Percentage':<30}{'Repetitions':<20}"
             f"{'Total Time':<20}{'Average Repetition Time':<30}{'Success Count':<20}"
             f"{'Success Probability':<25}{'Min Success Iteration':<30}{'Max Success Iteration':<30}"
-            f"{'Average Success Iteration':<30}{'Average Iterations':<30}{'Success':<20}{'Vertices':<20}")
+            f"{'Average Success Iteration':<30}{'Average Iterations':<30}{'Operations Count':<30}{'Success':<20}{'Vertices':<20}")
 
         for solution in self.solutions:
             print(solution)
@@ -419,7 +454,7 @@ class ISDPSolver:
                 f"{solution.graph.number_of_edges():<30}{solution.k:<20}{solution.kn:<20}{solution.iterations:<20}{solution.iterations_percentage:<30}{solution.repetitions:<20}"
                 f"{solution.total_time:<20.4f}{solution.average_repetition_time:<30.4f}{solution.success_count:<20}"
                 f"{solution.success_probability:<25.4f}{solution.min_success_iteration:<30}{solution.max_success_iteration:<30}"
-                f"{solution.average_success_iteration:<30.4f}{solution.average_iterations:<30.4f}{solution.success:<20}{str(solution.vertices):<20}")
+                f"{solution.average_success_iteration:<30.4f}{solution.average_iterations:<30.4f}{solution.average_operations_count:<30.4f}{solution.success:<20}{str(solution.vertices):<20}")
         print()
 
     def flush(self):
@@ -445,6 +480,7 @@ class ISDPSolver:
             'Max Success Iteration': [],
             'Average Success Iteration': [],
             'Average Iterations': [],
+            'Average Operations Count': [],
             'Vertices': []
         }
 
@@ -467,6 +503,7 @@ class ISDPSolver:
             data['Max Success Iteration'].append(solution.max_success_iteration)
             data['Average Success Iteration'].append(solution.average_success_iteration)
             data['Average Iterations'].append(solution.average_iterations)
+            data['Average Operations Count'].append(solution.average_operations_count)
             data['Vertices'].append(str(solution.vertices))
 
         df = pd.DataFrame(data)
@@ -604,8 +641,8 @@ def main():
     graph_files = args.graphs[0] if not args.file else args.file
     suffix = f"_{args.name}" if args.name else ""
 
-    graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
-    # graphs = load_n_danie_graphs(3)
+    # graphs = load_graphs(graph_files, args.group, args.mode, graph_range)
+    graphs = load_n_danie_graphs(3)
     # graphs = load_graphs('danie', mode='dwneV', grange=(None, 14))
 
     mapping = GraphMapping(graphs)

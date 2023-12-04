@@ -522,4 +522,4 @@ class InteractiveAnalyzer:
                 print("Invalid input. Using the first value.")
                 selected_iterations = possible_iterations[0]
             df = df[df[iterations_type] == selected_iterations]
-        return df if not return_iterations else df, iterations
+        return df if not return_iterations else (df, iterations)
