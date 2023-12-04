@@ -142,7 +142,7 @@ class ISDPSolver:
 
         if isinstance(num_iterations, float):
             iterations_percentage = num_iterations
-            num_iterations = int(num_iterations * max_combinations)
+            num_iterations = max(int(num_iterations * max_combinations), 10)
         else:
             iterations_percentage = num_iterations / max_combinations
 
