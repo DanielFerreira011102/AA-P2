@@ -31,18 +31,20 @@ def main():
         return literal_eval(value)
 
     options = {
-        'columns': {
+        'rename': {
             'random_fixed': {
                 'result': 'Success',
                 'nodes': 'Number of Nodes',
                 'edge_percentage': 'Edge Percentage',
                 'elapsed_time': 'Average Repetition Time',
+                'operations_count': 'Average Operations Count',
             },
             'random_percentage': {
                 'result': 'Success',
                 'nodes': 'Number of Nodes',
                 'edge_percentage': 'Edge Percentage',
                 'elapsed_time': 'Average Repetition Time',
+                'operations_count': 'Average Operations Count',
             },
         },
         'apply': {

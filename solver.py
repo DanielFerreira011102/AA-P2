@@ -44,25 +44,24 @@ class Solution:
 
     def __str__(self):
         return f"Solution(" \
-                f"graph={self.graph.name}, " \
-                f"k={self.k}, " \
-                f"kn={self.kn}, " \
-                f"success={self.success}, " \
-                f"success_count={self.success_count}, " \
-                f"vertices={self.vertices}, " \
-                f"total_time={self.total_time}, " \
-                f"average_repetition_time={self.average_repetition_time}, " \
-                f"min_success_iteration={self.min_success_iteration}, " \
-                f"max_success_iteration={self.max_success_iteration}, " \
-                f"average_success_iteration={self.average_success_iteration}, " \
-                f"average_iterations={self.average_iterations}, " \
-                f"success_probability={self.success_probability}, " \
-                f"iterations={self.iterations}, " \
-                f"iterations_percentage={self.iterations_percentage}, " \
-                f"repetitions={self.repetitions}, " \
-                f"average_operations_count={self.average_operations_count}" \
-                f")"
-
+               f"graph={self.graph.name}, " \
+               f"k={self.k}, " \
+               f"kn={self.kn}, " \
+               f"success={self.success}, " \
+               f"success_count={self.success_count}, " \
+               f"vertices={self.vertices}, " \
+               f"total_time={self.total_time}, " \
+               f"average_repetition_time={self.average_repetition_time}, " \
+               f"min_success_iteration={self.min_success_iteration}, " \
+               f"max_success_iteration={self.max_success_iteration}, " \
+               f"average_success_iteration={self.average_success_iteration}, " \
+               f"average_iterations={self.average_iterations}, " \
+               f"success_probability={self.success_probability}, " \
+               f"iterations={self.iterations}, " \
+               f"iterations_percentage={self.iterations_percentage}, " \
+               f"repetitions={self.repetitions}, " \
+               f"average_operations_count={self.average_operations_count}" \
+               f")"
 
     def __repr__(self):
         return str(self)
@@ -138,7 +137,6 @@ class ISDPSolver:
 
         nodes = list(graph.nodes())
         success_count = 0
-        operations_count = 0
         iterations_checked = []
         operations_count = 0
         example_solution = None
@@ -148,12 +146,12 @@ class ISDPSolver:
 
         if isinstance(num_iterations, float):
             iterations_percentage = num_iterations
-            num_iterations = max(int(num_iterations * max_combinations), 10)
+            num_iterations = max(int(num_iterations * max_combinations), 1)
         else:
             iterations_percentage = num_iterations / max_combinations
 
         if kn == 0:
-            return Solution(
+            solution = Solution(
                 graph=graph,
                 k=k,
                 kn=kn,
@@ -169,11 +167,14 @@ class ISDPSolver:
                 average_iterations=0,
                 iterations=num_iterations,
                 iterations_percentage=iterations_percentage,
-                repetitions=num_repetitions
+                repetitions=num_repetitions,
+                average_operations_count=0
             )
+            self.solutions.append(solution)
+            return solution
 
         if kn > n or n == 0:
-            return Solution(
+            solution = Solution(
                 graph=graph,
                 k=k,
                 kn=kn,
@@ -189,8 +190,11 @@ class ISDPSolver:
                 average_iterations=0,
                 iterations=num_iterations,
                 iterations_percentage=iterations_percentage,
-                repetitions=num_repetitions
+                repetitions=num_repetitions,
+                average_operations_count=0
             )
+            self.solutions.append(solution)
+            return solution
 
         for repetition in range(num_repetitions):
             selected_vertices_set = set()
@@ -287,12 +291,12 @@ class ISDPSolver:
 
         if any(isinstance(check_point, float) for check_point in check_points):
             iteration_percentages = check_points
-            check_points = [int(check_point * max_combinations) for check_point in check_points]
+            check_points = [max(int(check_point * max_combinations), 1) for check_point in check_points]
         else:
             iteration_percentages = [check_point / max_combinations for check_point in check_points]
 
         if kn == 0:
-            return Solution(
+            solutions = [Solution(
                 graph=graph,
                 k=k,
                 kn=kn,
@@ -306,32 +310,37 @@ class ISDPSolver:
                 max_success_iteration=0,
                 average_success_iteration=0,
                 average_iterations=0,
-                iterations=max(check_points),
-                iterations_percentage=max(iteration_percentages),
+                iterations=iterations,
+                iterations_percentage=iterations_percentage,
                 repetitions=num_repetitions,
                 average_operations_count=0
-            )
+            ) for iterations, iterations_percentage in zip(check_points, iteration_percentages)]
+            self.solutions.extend(solutions)
+            return solutions
 
         if kn > n or n == 0:
-            return Solution(
+            solutions = [Solution(
                 graph=graph,
                 k=k,
                 kn=kn,
                 success=False,
                 success_probability=0,
                 success_count=0,
-                vertices=example_solution_at_checkpoints,
+                vertices=example_solution,
                 total_time=0,
                 average_repetition_time=0,
                 min_success_iteration=None,
                 max_success_iteration=None,
                 average_success_iteration=None,
                 average_iterations=0,
-                iterations=max(check_points),
-                iterations_percentage=max(iteration_percentages),
+                iterations=iterations,
+                iterations_percentage=iterations_percentage,
                 repetitions=num_repetitions,
                 average_operations_count=0
-            )
+            ) for example_solution, iterations, iterations_percentage in
+                zip(example_solution_at_checkpoints, check_points, iteration_percentages)]
+            self.solutions.extend(solutions)
+            return solutions
 
         for repetition in range(num_repetitions):
             start_repetition = perf_counter()
@@ -340,6 +349,10 @@ class ISDPSolver:
             for iteration in range(max(check_points)):
 
                 if len(selected_vertices_set) == max_combinations:
+                    for i, check_point in enumerate(check_points):
+                        if iteration < check_point:
+                            operations_count_at_checkpoints[i].append(operations_count)
+                            repetition_times_at_checkpoints[i].append(perf_counter() - start_repetition)
                     break
 
                 selected_vertices = random.sample(nodes, kn)
@@ -401,8 +414,9 @@ class ISDPSolver:
             iterations_checked))) / num_repetitions if num_repetitions > 0 else 0
                                              for check_point, iterations_checked in
                                              zip(check_points, iterations_checked_at_checkpoints)]
-        average_operations_count_at_checkpoints = [sum(operations_count) / len(operations_count) if len(operations_count) > 0 else 0
-                                                    for operations_count in operations_count_at_checkpoints]
+        average_operations_count_at_checkpoints = [
+            sum(operations_count) / len(operations_count) if len(operations_count) > 0 else 0
+            for operations_count in operations_count_at_checkpoints]
         solution_at_checkpoints = [Solution(
             graph=graph,
             k=k,
@@ -424,11 +438,12 @@ class ISDPSolver:
         ) for success_probability, success_count, example_solution, total_time, average_repetition_time,
               min_iteration_for_success, max_iteration_for_success, average_iteration_for_success, average_iterations,
               check_point, iteration_percentage, operations_count in
-                zip(success_probability_at_checkpoints, success_count_at_checkpoints,
-                 example_solution_at_checkpoints, total_time_at_checkpoints,
-                 average_repetition_time_at_checkpoints, min_iteration_for_success_at_checkpoints,
-                 max_iteration_for_success_at_checkpoints, average_iteration_for_success_at_checkpoints,
-                 average_iterations_at_checkpoints, check_points, iteration_percentages, average_operations_count_at_checkpoints)]
+            zip(success_probability_at_checkpoints, success_count_at_checkpoints,
+                example_solution_at_checkpoints, total_time_at_checkpoints,
+                average_repetition_time_at_checkpoints, min_iteration_for_success_at_checkpoints,
+                max_iteration_for_success_at_checkpoints, average_iteration_for_success_at_checkpoints,
+                average_iterations_at_checkpoints, check_points, iteration_percentages,
+                average_operations_count_at_checkpoints)]
 
         self.solutions.extend(solution_at_checkpoints)
 
@@ -661,6 +676,7 @@ def main():
     for graph in graphs:
         logging.info(f"Solving {graph.name} -> {graph.path}")
         for k in k_values:
+            logging.info(f"Trying k={k}...")
             solutions = solver.solve_at_checkpoints(graph, k, num_repetitions=max(num_repetitions_values),
                                                     check_points=num_iterations_values)
             for solution in solutions:

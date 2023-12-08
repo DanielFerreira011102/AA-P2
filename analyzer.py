@@ -51,7 +51,7 @@ class InteractiveAnalyzer:
                         df[column] = df[column].replace(values)
 
     def rename_columns(self):
-        for df_name, column_mapping in self.options.get('columns', {}).items():
+        for df_name, column_mapping in self.options.get('rename', {}).items():
             if df_name in self.dataframes:
                 df = self.dataframes[df_name]
                 for column, assigned_column in column_mapping.items():
@@ -131,17 +131,12 @@ class InteractiveAnalyzer:
         df_model = self.select_iterations(df_model, df_model_title)
         df_to_compare = self.select_iterations(df_to_compare, df_to_compare_title)
 
-        print(df_model)
-        print(df_to_compare)
-        print(type(df_model))
-        print(type(df_to_compare))
-
         merged_df = pd.merge(df_model, df_to_compare, on=['edge_percentage', 'k', 'nodes'], how='inner',
                              suffixes=('_model', '_compare'))
 
-        cm = confusion_matrix(merged_df['result_model'], merged_df['result_compare'])
+        cm = confusion_matrix(merged_df['result_model'], merged_df['result_compare'], labels=[True, False]).transpose()
 
-        TN, FP, FN, TP = cm.ravel()
+        TP, FP, FN, TN = cm.ravel()
 
         print("+" + "-" * 79 + "+")
 
@@ -165,8 +160,10 @@ class InteractiveAnalyzer:
 
         for k in sorted(unique_k_values):
             subset_df = merged_df[merged_df['k'] == k]
-            subset_sm = confusion_matrix(subset_df['result_model'], subset_df['result_compare'])
-            subset_TN, subset_FP, subset_FN, subset_TP = subset_sm.ravel()
+            subset_sm = confusion_matrix(subset_df['result_model'], subset_df['result_compare'],
+                                         labels=[True, False]).transpose()
+
+            subset_TP, subset_FP, subset_FN, subset_TN = subset_sm.ravel()
 
             K_CM.append([k, subset_TN, subset_FP, subset_FN, subset_TP])
 
@@ -183,8 +180,9 @@ class InteractiveAnalyzer:
 
         for edge_percentage in sorted(unique_edge_percentage_values):
             subset_df = merged_df[merged_df['edge_percentage'] == edge_percentage]
-            subset_sm = confusion_matrix(subset_df['result_model'], subset_df['result_compare'])
-            subset_TN, subset_FP, subset_FN, subset_TP = subset_sm.ravel()
+            subset_sm = confusion_matrix(subset_df['result_model'], subset_df['result_compare'],
+                                         labels=[True, False]).transpose()
+            subset_TP, subset_FP, subset_FN, subset_TN = subset_sm.ravel()
 
             EP_CM.append([edge_percentage, subset_TN, subset_FP, subset_FN, subset_TP])
 
@@ -201,8 +199,11 @@ class InteractiveAnalyzer:
 
         for nodes in sorted(unique_nodes_values):
             subset_df = merged_df[merged_df['nodes'] == nodes]
-            subset_sm = confusion_matrix(subset_df['result_model'], subset_df['result_compare'])
-            subset_TN, subset_FP, subset_FN, subset_TP = subset_sm.ravel()
+            subset_sm = confusion_matrix(subset_df['result_model'], subset_df['result_compare'],
+                                         labels=[True, False]).transpose()
+
+            # print number of True columns in result_model and result_compare
+            subset_TP, subset_FP, subset_FN, subset_TN = subset_sm.ravel()
 
             N_CM.append([nodes, subset_TN, subset_FP, subset_FN, subset_TP])
 
@@ -327,6 +328,54 @@ class InteractiveAnalyzer:
 
         print()
 
+    def visualize_iteration_confusion_comparison(self, df_model_title, df_to_compare_title):
+        df_model = self.dataframes.get(df_model_title, None)
+        df_to_compare = self.dataframes.get(df_to_compare_title, None)
+
+        if df_model is None or df_to_compare is None:
+            print(f"Invalid dataframe: {df_model_title}")
+            return
+
+        if df_to_compare_title not in ['random_fixed', 'random_percentage']:
+            print(f"Invalid dataframe: {df_to_compare_title}")
+            return
+
+        iterations = df_to_compare['Iterations'].unique()
+        iterations_percentage = df_to_compare['Iterations Percentage'].unique()
+        possible_iterations, iterations_type = (iterations, 'Iterations') if len(iterations) < len(
+            iterations_percentage) else (iterations_percentage, 'Iterations Percentage')
+
+        print("+" + "-" * 66 + "+")
+        print("| {:^64} |".format(df_to_compare_title))
+        print("+" + "-" * 66 + "+")
+
+        print("| {:<12} {:<12} {:<12} {:<12} {:<12} |".format("iterations", "accuracy", "precision", "recall",
+                                                              "f1-score"))
+
+        print("+" + "-" * 66 + "+")
+
+        for iteration in possible_iterations:
+            df_to_compare_iteration = df_to_compare[df_to_compare[iterations_type] == iteration]
+
+            merged_df = pd.merge(df_model, df_to_compare_iteration, on=['edge_percentage', 'k', 'nodes'], how='inner',
+                                 suffixes=('_model', '_compare'))
+
+            cm = confusion_matrix(merged_df['result_model'], merged_df['result_compare'],
+                                  labels=[True, False]).transpose()
+
+            TP, FP, FN, TN = cm.ravel()
+
+            accuracy = (TP + TN) / (TP + TN + FP + FN)
+            precision = TP / (TP + FP)
+            recall = TP / (TP + FN)
+            f1_score = 2 * (precision * recall) / (precision + recall)
+
+            print("| {:<12} {:<12.2e} {:<12.2e} {:<12.2e} {:<12.2e} |".format(iteration, accuracy, precision, recall,
+                                                                              f1_score))
+
+        print("+" + "-" * 66 + "+")
+        print()
+
     def visualize_elapsed_time(self, title, path, log, window_size=1):
         df = self.dataframes.get(title, None)
 
@@ -343,13 +392,15 @@ class InteractiveAnalyzer:
             for edge_percentage, color in zip(sorted_edge_percentages, colors):
                 sub_df = df[(df['k'] == k) & (df['edge_percentage'] == edge_percentage)]
                 smoothed_elapsed_time = sub_df['elapsed_time'].rolling(window=window_size).mean()
-                smoothed_elapsed_time = np.log2(smoothed_elapsed_time + 0.01) if log else smoothed_elapsed_time
+
+                min_smoothed_elapsed_time = np.min(smoothed_elapsed_time[smoothed_elapsed_time != 0])
+                smoothed_elapsed_time = np.log2(smoothed_elapsed_time + min_smoothed_elapsed_time) if log else smoothed_elapsed_time
                 ax.plot(sub_df['nodes'], smoothed_elapsed_time,
-                        label=f'$\\varepsilon_p = {edge_percentage}$', marker='o', color=color)
+                        label=f'$\\varepsilon_p = {edge_percentage}$', color=color)
 
             ax.set_xlabel('n')
             ax.set_ylabel('log2(elapsed time (s))' if log else 'elapsed time (s)')
-            ax.legend(loc='upper left')
+            ax.legend(loc='best')
             ax.grid()
             plt.tight_layout()
 
@@ -358,7 +409,7 @@ class InteractiveAnalyzer:
                             dpi=300, bbox_inches='tight')
             plt.show()
 
-    def visualize_forecast_elapsed_time(self, title, path, log, p0=None, maxfev=100000):
+    def visualize_forecast_elapsed_time(self, title, path, log, p0=None, maxfev=1000000):
         df = self.dataframes.get(title, None)
 
         df, iterations = self.select_iterations(df, title, return_iterations=True)
@@ -366,7 +417,13 @@ class InteractiveAnalyzer:
         unique_k_values = df['k'].unique()
 
         def formal(n, a, b, k):
-            return a * n * iterations * k ** 2 + b
+            kn = (n * k).astype(int)
+            return a * n * iterations * (kn ** 2) + b
+
+        def formal_percentage(n, a, b, k):
+            kn = (n * k).astype(int)
+            result_array = comb(n, kn) * iterations
+            return a * n * np.maximum(result_array, 1) * (kn ** 2) + b
 
         arg_count = len(inspect.signature(formal).parameters)
 
@@ -374,37 +431,43 @@ class InteractiveAnalyzer:
 
         p0.pop(0)
 
+        if isinstance(iterations, float):
+            formal = formal_percentage
+
         for k in unique_k_values:
             fig, ax = plt.subplots(figsize=(6, 5))
 
             sorted_edge_percentages = sorted(df['edge_percentage'].unique())
             colors = sns.color_palette("tab10", n_colors=len(sorted_edge_percentages) + 1)
 
-            formal = partial(formal, k=k)
+            formal_ = partial(formal, k=k)
+
+            print("For k = ", k)
 
             for edge_percentage, color in zip(sorted_edge_percentages, colors):
                 sub_df = df[(df['k'] == k) & (df['edge_percentage'] == edge_percentage)]
                 x_values = sub_df['nodes']
                 y_values = sub_df['elapsed_time']
-                popt = curve_fit(formal, x_values, y_values, p0=p0, maxfev=maxfev)
+
+                popt = curve_fit(formal_, x_values, y_values, p0=p0, maxfev=maxfev)
 
                 forecast_x_values = np.array([i for i in range(4, 1000)])
-                forecast_y_values = np.array([formal(i, *popt[0]) for i in forecast_x_values])
-                r2 = 1 - np.sum((y_values - formal(x_values, *popt[0])) ** 2) / np.sum(
+                forecast_y_values = np.array([formal_(i, *popt[0]) for i in forecast_x_values])
+                r2 = 1 - np.sum((y_values - formal_(x_values, *popt[0])) ** 2) / np.sum(
                     (y_values - np.mean(y_values)) ** 2)
 
-                print("For k = ", k, " and edge percentage = ", edge_percentage)
-                print("a = ", popt[0][0])
-                print("b = ", popt[0][1])
-                print("R2 = ", r2)
+                print("\tFor edge percentage = ", edge_percentage, "a = ", "{:.2e}".format(popt[0][0]), "b = ",
+                      "{:.2e}".format(popt[0][1]), "r2 = ", "{:.2e}".format(r2))
 
-                forecast_y_values = np.log2(forecast_y_values + 0.01) if log else forecast_y_values
+                min_forecast_y_value = np.min(forecast_y_values[forecast_y_values != 0])
+
+                forecast_y_values = np.log2(forecast_y_values + min_forecast_y_value) if log else forecast_y_values
                 ax.plot(forecast_x_values, forecast_y_values,
                         label=f'$\\varepsilon_p = {edge_percentage}$', color=color)
 
             ax.set_xlabel('n')
             ax.set_ylabel('log2(elapsed time (s))' if log else 'elapsed time (s)')
-            ax.legend(loc='upper left')
+            ax.legend(loc='best')
             ax.grid()
             plt.tight_layout()
 
@@ -413,15 +476,80 @@ class InteractiveAnalyzer:
                             dpi=300, bbox_inches='tight')
             plt.show()
 
+    def visualize_formal_elapsed_time(self, title, path, log):
+        df = self.dataframes.get(title, None)
+
+        df, iterations = self.select_iterations(df, title, return_iterations=True)
+
+        unique_k_values = df['k'].unique()
+
+        def formal(n, k):
+            kn = (n * k).astype(int)
+            return n * iterations * (kn ** 2)
+
+        def formal_percentage(n, k):
+            kn = (n * k).astype(int)
+            result_array = comb(n, kn) * iterations
+            return n * np.maximum(result_array, 1) * (kn ** 2)
+
+        formalf = "$n \\cdot {iterations} \\cdot \\left( \\lfloor n \\cdot {k} \\rfloor \\right)^2$"
+        if isinstance(iterations, float):
+            formal = formal_percentage
+            formalf = "$n \\cdot \\binom{{n}}{{\\lfloor n \\cdot {k} \\rfloor}} \\cdot {iterations} \\cdot \\left( \\lfloor n \\cdot {k} \\rfloor \\right)^2$"
+
+        arg_count = len(inspect.signature(formal).parameters)
+
+        # x_values is the range of n values in the df
+        x_values = df['nodes'].unique()
+
+        for k in sorted(unique_k_values):
+            fig, ax = plt.subplots(figsize=(6, 5))
+
+            sorted_edge_percentages = sorted(df['edge_percentage'].unique())
+            colors = sns.color_palette("tab10", n_colors=len(sorted_edge_percentages) + 1)
+
+            for edge_percentage, color in zip(sorted_edge_percentages, colors):
+                sub_df = df[(df['k'] == k) & (df['edge_percentage'] == edge_percentage)]
+                y_values = sub_df['operations_count']
+
+                min_y_value = np.min(y_values[y_values != 0])
+
+                y_values = np.log2(y_values + min_y_value) if log else y_values
+                ax.plot(x_values, y_values,
+                        label=f'$\\varepsilon_p = {edge_percentage}$', color=color)
+
+            formal_ = partial(formal, k=k)
+
+            y_values = formal_(x_values)
+
+            min_y_value = np.min(y_values[y_values != 0])
+            y_values = np.log2(y_values + min_y_value) if log else y_values
+            ax.plot(x_values, y_values, label=formalf.format(k=k, iterations=iterations),
+                    marker='x', color='black')
+
+            ax.set_xlabel('n')
+            ax.set_ylabel('log2(operations count)' if log else 'operations count')
+            ax.legend(loc='best')
+            ax.grid()
+            plt.tight_layout()
+
+            if path is not None:
+                plt.savefig(os.path.join(path, f'{title}_{k}_cf' + ('_log' if log else '') + '.png'),
+                            dpi=300, bbox_inches='tight')
+            plt.show()
+
     def run(self):
         OPTIONS = [
             (1, "Table query+", "Show stats table", r"(?:TABLE|TBL|1)\s+(.*)\s*$"),
             (2, "Confusion model query+", "Show confusion matrix", r"(?:CONFUSION|CM|2)\s+(.*)\s*$"),
-            (3, "Time query+", "Show elapsed time graphs", r"(?:TIME|TM|3)\s+(.*)\s*$"),
-            (4, "Forecast query+", "Show forecast elapsed time graphs", r"(?:FORECAST|FC|4)\s+(.*)\s*$"),
-            (5, "Help", "Show help menu", r"(?:HELP|H|5)\s*$"),
-            (6, "Quit", "Terminate the program", r"(?:QUIT|EXIT|Q|6)\s*$"),
-            (7, "Clear", "Clear the screen", r"(?:CLEAR|CLS|7)\s*$")
+            (3, "Iterations model query+", "Show confusion matrix comparing iterations",
+             r"(?:ITERATIONS|IT|3)\s+(.*)\s*$"),
+            (4, "Time query+", "Show elapsed time graphs", r"(?:TIME|TM|4)\s+(.*)\s*$"),
+            (5, "Forecast query+", "Show forecast elapsed time graphs", r"(?:FORECAST|FC|5)\s+(.*)\s*$"),
+            (6, "Formal query+", "Show formal elapsed time graphs", r"(?:FORMAL|FM|6)\s+(.*)\s*$"),
+            (7, "Help", "Show help menu", r"(?:HELP|H|7)\s*$"),
+            (8, "Quit", "Terminate the program", r"(?:QUIT|EXIT|Q|8)\s*$"),
+            (9, "Clear", "Clear the screen", r"(?:CLEAR|CLS|9)\s*$")
         ]
 
         def _render_options():
@@ -484,11 +612,8 @@ class InteractiveAnalyzer:
 
             elif option_id == 3:
                 dataframes = option_match.group(1).split()
-                log_question = input("Do you want to log the graphs? (Y/N): ").strip()
-                log = log_question.strip().lower() in ['y', 'yes']
-
-                for dataframe in dataframes:
-                    self.visualize_elapsed_time(dataframe, out, log)
+                for dataframe in dataframes[1:]:
+                    self.visualize_iteration_confusion_comparison(dataframes[0], dataframe)
 
             elif option_id == 4:
                 dataframes = option_match.group(1).split()
@@ -496,21 +621,38 @@ class InteractiveAnalyzer:
                 log = log_question.strip().lower() in ['y', 'yes']
 
                 for dataframe in dataframes:
+                    self.visualize_elapsed_time(dataframe, out, log)
+
+            elif option_id == 5:
+                dataframes = option_match.group(1).split()
+                log_question = input("Do you want to log the graphs? (Y/N): ").strip()
+                log = log_question.strip().lower() in ['y', 'yes']
+
+                for dataframe in dataframes:
                     self.visualize_forecast_elapsed_time(dataframe, out, log)
 
-            elif option == 5:
+            elif option_id == 6:
+                dataframes = option_match.group(1).split()
+                log_question = input("Do you want to log the graphs? (Y/N): ").strip()
+                log = log_question.strip().lower() in ['y', 'yes']
+
+                for dataframe in dataframes:
+                    self.visualize_formal_elapsed_time(dataframe, out, log)
+
+            elif option_id == 7:
+                print("HELLO")
                 print(HELP_MENU)
 
-            elif option_id == 6:
+            elif option_id == 8:
                 print("Exiting the program...")
                 break
 
-            elif option_id == 7:
+            elif option_id == 9:
                 os.system('cls' if os.name == 'nt' else 'clear')
 
     @staticmethod
     def select_iterations(df, title, return_iterations=False):
-        iterations = None
+        selected_iterations = None
         if title == 'random_fixed' or title == 'random_percentage':
             iterations = df['Iterations'].unique()
             iterations_percentage = df['Iterations Percentage'].unique()
@@ -522,4 +664,4 @@ class InteractiveAnalyzer:
                 print("Invalid input. Using the first value.")
                 selected_iterations = possible_iterations[0]
             df = df[df[iterations_type] == selected_iterations]
-        return df if not return_iterations else (df, iterations)
+        return df if not return_iterations else (df, selected_iterations)
