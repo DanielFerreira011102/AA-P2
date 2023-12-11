@@ -18,7 +18,7 @@ df_random_sw = pd.read_csv('out/sw/results_sw.csv')
 def main():
     data = {
         'brute_force': df_brute_force,
-        'clever': df_clever,
+        'branching': df_clever,
         'greedy_v1': df_greedy_v1,
         'greedy_v2': df_greedy_v2,
         'random_fixed': df_random_danie_fixed,
@@ -31,6 +31,26 @@ def main():
         return literal_eval(value)
 
     options = {
+        'metadata': {
+            'brute_force': {
+                'name': 'Brute Force',
+            },
+            'branching': {
+                'name': 'Branching',
+            },
+            'greedy_v1': {
+                'name': 'Greedy',
+            },
+            'greedy_v2': {
+                'name': 'Improved Greedy',
+            },
+            'random_fixed': {
+                'name': 'Randomized ({iterations})',
+            },
+            'random_percentage': {
+                'name': 'Randomized ({iterations}%)',
+            },
+        },
         'rename': {
             'random_fixed': {
                 'result': 'Success',
@@ -59,7 +79,7 @@ def main():
             'brute_force': [
                 {'column': 'result', 'values': {0: False, 1: True}},
             ],
-            'clever': [
+            'branching': [
                 {'column': 'result', 'values': {0: False, 1: True}},
             ],
             'greedy_v1': [

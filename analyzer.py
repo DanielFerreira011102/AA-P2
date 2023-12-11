@@ -120,6 +120,46 @@ class InteractiveAnalyzer:
         print("+" + "-" * 92 + "+")
         print()
 
+    def visualize_accumulation(self, df_model_title, df_to_compare_title, path):
+        df_model = self.dataframes.get(df_model_title, None)
+        df_to_compare = self.dataframes.get(df_to_compare_title, None)
+
+        if df_model is None or df_to_compare is None:
+            print(f"Invalid dataframe: {df_model_title}")
+            return
+
+        df_model = self.select_iterations(df_model, df_model_title)
+        df_to_compare = self.select_iterations(df_to_compare, df_to_compare_title)
+
+        merged_df = pd.merge(df_model, df_to_compare, on=['edge_percentage', 'k', 'nodes'], how='inner',
+                             suffixes=('_model', '_compare'))
+
+        unique_k_values = sorted(merged_df['k'].unique())
+
+        for k in unique_k_values:
+            fig, ax = plt.subplots(figsize=(6, 5))
+
+            sorted_edge_percentages = sorted(merged_df['edge_percentage'].unique())
+            colors = sns.color_palette("tab10", n_colors=len(sorted_edge_percentages))
+
+            for edge_percentage, color in zip(sorted_edge_percentages, colors):
+                sub_df = merged_df[(merged_df['k'] == k) & (merged_df['edge_percentage'] == edge_percentage)]
+                sub_df['result'] = sub_df['result_model'] != sub_df['result_compare']
+                sub_df['result'] = sub_df['result'].cumsum()
+
+                ax.plot(sub_df['nodes'], sub_df['result'], label=f'$\\varepsilon_p = {edge_percentage}$', color=color)
+
+            ax.set_xlabel('n')
+            ax.set_ylabel('Cumulative Errors')
+            ax.legend(loc='best')
+            ax.grid()
+
+            plt.tight_layout()
+            plt.savefig(os.path.join(path, f'{df_to_compare_title}_{k}_cfvsnnddkvaep.png'), dpi=300,
+                        bbox_inches='tight')
+
+            plt.show()
+
     def confusion(self, df_model_title, df_to_compare_title):
         df_model = self.dataframes.get(df_model_title, None)
         df_to_compare = self.dataframes.get(df_to_compare_title, None)
@@ -136,6 +176,10 @@ class InteractiveAnalyzer:
 
         cm = confusion_matrix(merged_df['result_model'], merged_df['result_compare'], labels=[True, False]).transpose()
 
+        # node sizes for which the algorithm fails
+        nodes = merged_df[merged_df['result_model'] != merged_df['result_compare']]['nodes'].unique()
+        print(f"Nodes for which the algorithm fails: {nodes}")
+
         TP, FP, FN, TN = cm.ravel()
 
         print("+" + "-" * 79 + "+")
@@ -144,11 +188,11 @@ class InteractiveAnalyzer:
 
         print("+" + "-" * 79 + "+")
 
-        print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("label", "value", "TN", "FP", "FN", "TP"))
+        print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("label", "value", "TP", "FP", "TN", "FN"))
 
         print("+" + "-" * 79 + "+")
 
-        print("| {:25} {:<12} {:<12} {:<12} {:<12} |".format("Total", TN, FP, FN, TP))
+        print("| {:25} {:<12} {:<12} {:<12} {:<12} |".format("Total", "", TP, FP, TN, FN))
 
         unique_k_values = sorted(merged_df['k'].unique())
         unique_edge_percentage_values = sorted(merged_df['edge_percentage'].unique())
@@ -168,11 +212,11 @@ class InteractiveAnalyzer:
             K_CM.append([k, subset_TN, subset_FP, subset_FN, subset_TP])
 
             if k == unique_k_values[len(unique_k_values) // 2]:
-                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("k", k, subset_TN, subset_FP, subset_FN,
-                                                                             subset_TP))
+                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("k", k, subset_TP, subset_FP,
+                                                                             subset_TN, subset_FN))
             else:
-                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("", k, subset_TN, subset_FP, subset_FN,
-                                                                             subset_TP))
+                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("", k, subset_TP, subset_FP,
+                                                                             subset_TN, subset_FN))
 
         print("+" + "-" * 79 + "+")
 
@@ -187,11 +231,11 @@ class InteractiveAnalyzer:
             EP_CM.append([edge_percentage, subset_TN, subset_FP, subset_FN, subset_TP])
 
             if edge_percentage == unique_edge_percentage_values[len(unique_edge_percentage_values) // 2]:
-                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("ep", edge_percentage, subset_TN,
-                                                                             subset_FP, subset_FN, subset_TP))
+                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("ep", edge_percentage, subset_TP, subset_FP,
+                                                                             subset_TN, subset_FN))
             else:
-                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("", edge_percentage, subset_TN, subset_FP,
-                                                                             subset_FN, subset_TP))
+                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("", edge_percentage, subset_TP, subset_FP,
+                                                                             subset_TN, subset_FN))
 
         print("+" + "-" * 79 + "+")
 
@@ -211,11 +255,11 @@ class InteractiveAnalyzer:
 
         for nodes, subset_TN, subset_FP, subset_FN, subset_TP in p_N_CM:
             if nodes == p_N_CM[len(p_N_CM) // 2][0]:
-                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("n", nodes, subset_TN, subset_FP,
-                                                                             subset_FN, subset_TP))
+                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("n", nodes, subset_TP, subset_FP,
+                                                                             subset_TN, subset_FN))
             else:
-                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("", nodes, subset_TN, subset_FP,
-                                                                             subset_FN, subset_TP))
+                print("| {:<12} {:<12} {:<12} {:<12} {:<12} {:<12} |".format("", nodes, subset_TP, subset_FP,
+                                                                             subset_TN, subset_FN))
 
         print("+" + "-" * 79 + "+")
 
@@ -379,6 +423,10 @@ class InteractiveAnalyzer:
     def visualize_elapsed_time(self, title, path, log, window_size=1):
         df = self.dataframes.get(title, None)
 
+        if df is None:
+            print(f"Invalid dataframe: {title}")
+            return
+
         df, iterations = self.select_iterations(df, title, return_iterations=True)
 
         unique_k_values = df['k'].unique()
@@ -408,6 +456,52 @@ class InteractiveAnalyzer:
                 plt.savefig(os.path.join(path, f'{title}_{k}_etvsnnddkvaep' + ('_log' if log else '') + '.png'),
                             dpi=300, bbox_inches='tight')
             plt.show()
+
+    def visualize_and_compare_elapsed_time(self, titles, path, log, window_size=1):
+        dfs = [self.dataframes.get(title, None) for title in titles]
+
+        if any(df is None for df in dfs):
+            print(f"Invalid dataframe: {titles}")
+            return
+
+        dfs = [self.select_iterations(df, title, return_iterations=True) for df, title in zip(dfs, titles)]
+
+        unique_k_values = dfs[0][0]['k'].unique()
+
+        for k in unique_k_values:
+
+            sorted_edge_percentages = sorted(dfs[0][0]['edge_percentage'].unique())
+
+            for edge_percentage in sorted_edge_percentages:
+                fig, ax = plt.subplots(figsize=(6, 5))
+
+                colors = sns.color_palette("tab10", n_colors=len(dfs) + 1)
+
+                for (df, iterations), color, title in zip(dfs, colors, titles):
+                    sub_df = df[(df['k'] == k) & (df['edge_percentage'] == edge_percentage)]
+                    smoothed_elapsed_time = sub_df['elapsed_time'].rolling(window=window_size).mean()
+
+                    min_smoothed_elapsed_time = np.min(smoothed_elapsed_time[smoothed_elapsed_time != 0])
+                    smoothed_elapsed_time = np.log2(smoothed_elapsed_time + min_smoothed_elapsed_time) if log else smoothed_elapsed_time
+                    meta_name = self.options.get('metadata', {}).get(title, {}).get('name', None)
+                    # check if metadata can be formatted with iterations (includes {iterations} in string)
+                    if meta_name is not None and '{iterations}' in meta_name:
+                        if isinstance(iterations, float):
+                            iterations = int(iterations * 100)
+                        meta_name = meta_name.format(iterations="{:,}".format(iterations))
+                    ax.plot(sub_df['nodes'], smoothed_elapsed_time,
+                            label=f'{title if meta_name is None else meta_name}', color=color)
+
+                ax.set_xlabel('n')
+                ax.set_ylabel('log2(elapsed time (s))' if log else 'elapsed time (s)')
+                ax.legend(loc='best')
+                ax.grid()
+                plt.tight_layout()
+
+                if path is not None:
+                    plt.savefig(os.path.join(path, f'{"_".join(titles)}_{k}_{edge_percentage}_cmp_et' + ('_log' if log else '') + '.png'),
+                                dpi=300, bbox_inches='tight')
+                plt.show()
 
     def visualize_forecast_elapsed_time(self, title, path, log, p0=None, maxfev=1000000):
         df = self.dataframes.get(title, None)
@@ -542,14 +636,16 @@ class InteractiveAnalyzer:
         OPTIONS = [
             (1, "Table query+", "Show stats table", r"(?:TABLE|TBL|1)\s+(.*)\s*$"),
             (2, "Confusion model query+", "Show confusion matrix", r"(?:CONFUSION|CM|2)\s+(.*)\s*$"),
-            (3, "Iterations model query+", "Show confusion matrix comparing iterations",
-             r"(?:ITERATIONS|IT|3)\s+(.*)\s*$"),
-            (4, "Time query+", "Show elapsed time graphs", r"(?:TIME|TM|4)\s+(.*)\s*$"),
-            (5, "Forecast query+", "Show forecast elapsed time graphs", r"(?:FORECAST|FC|5)\s+(.*)\s*$"),
-            (6, "Formal query+", "Show formal elapsed time graphs", r"(?:FORMAL|FM|6)\s+(.*)\s*$"),
-            (7, "Help", "Show help menu", r"(?:HELP|H|7)\s*$"),
-            (8, "Quit", "Terminate the program", r"(?:QUIT|EXIT|Q|8)\s*$"),
-            (9, "Clear", "Clear the screen", r"(?:CLEAR|CLS|9)\s*$")
+            (3, "Acumulation model query+", "Show acumulation graph", r"(?:ACUMULATION|ACM|3)\s+(.*)\s*$"),
+            (4, "Iterations model query+", "Show confusion matrix comparing iterations",
+             r"(?:ITERATIONS|IT|4)\s+(.*)\s*$"),
+            (5, "Time query+", "Show elapsed time graphs", r"(?:TIME|TM|5)\s+(.*)\s*$"),
+            (6, "Times query+", "Show elapsed time graphs", r"(?:TIMES|TMS|6)\s+(.*)\s*$"),
+            (7, "Forecast query+", "Show forecast elapsed time graphs", r"(?:FORECAST|FC|7)\s+(.*)\s*$"),
+            (8, "Formal query+", "Show formal elapsed time graphs", r"(?:FORMAL|FM|8)\s+(.*)\s*$"),
+            (9, "Help", "Show help menu", r"(?:HELP|H|9)\s*$"),
+            (10, "Quit", "Terminate the program", r"(?:QUIT|EXIT|Q|10)\s*$"),
+            (11, "Clear", "Clear the screen", r"(?:CLEAR|CLS|11)\s*$")
         ]
 
         def _render_options():
@@ -613,15 +709,12 @@ class InteractiveAnalyzer:
             elif option_id == 3:
                 dataframes = option_match.group(1).split()
                 for dataframe in dataframes[1:]:
-                    self.visualize_iteration_confusion_comparison(dataframes[0], dataframe)
+                    self.visualize_accumulation(dataframes[0], dataframe, out)
 
             elif option_id == 4:
                 dataframes = option_match.group(1).split()
-                log_question = input("Do you want to log the graphs? (Y/N): ").strip()
-                log = log_question.strip().lower() in ['y', 'yes']
-
-                for dataframe in dataframes:
-                    self.visualize_elapsed_time(dataframe, out, log)
+                for dataframe in dataframes[1:]:
+                    self.visualize_iteration_confusion_comparison(dataframes[0], dataframe)
 
             elif option_id == 5:
                 dataframes = option_match.group(1).split()
@@ -629,9 +722,24 @@ class InteractiveAnalyzer:
                 log = log_question.strip().lower() in ['y', 'yes']
 
                 for dataframe in dataframes:
-                    self.visualize_forecast_elapsed_time(dataframe, out, log)
+                    self.visualize_elapsed_time(dataframe, out, log)
 
             elif option_id == 6:
+                dataframes = option_match.group(1).split()
+                log_question = input("Do you want to log the graphs? (Y/N): ").strip()
+                log = log_question.strip().lower() in ['y', 'yes']
+
+                self.visualize_and_compare_elapsed_time(dataframes, out, log)
+
+            elif option_id == 7:
+                dataframes = option_match.group(1).split()
+                log_question = input("Do you want to log the graphs? (Y/N): ").strip()
+                log = log_question.strip().lower() in ['y', 'yes']
+
+                for dataframe in dataframes:
+                    self.visualize_forecast_elapsed_time(dataframe, out, log)
+
+            elif option_id == 8:
                 dataframes = option_match.group(1).split()
                 log_question = input("Do you want to log the graphs? (Y/N): ").strip()
                 log = log_question.strip().lower() in ['y', 'yes']
@@ -639,15 +747,15 @@ class InteractiveAnalyzer:
                 for dataframe in dataframes:
                     self.visualize_formal_elapsed_time(dataframe, out, log)
 
-            elif option_id == 7:
+            elif option_id == 9:
                 print("HELLO")
                 print(HELP_MENU)
 
-            elif option_id == 8:
+            elif option_id == 10:
                 print("Exiting the program...")
                 break
 
-            elif option_id == 9:
+            elif option_id == 11:
                 os.system('cls' if os.name == 'nt' else 'clear')
 
     @staticmethod
